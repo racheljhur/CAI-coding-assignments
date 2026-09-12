@@ -1,0 +1,26 @@
+User: I'd like for you to emulate a process wherein you assess the quality of a conversational AI system I designed, purely through prompting. The assessment should use state-of-the
+art evaluation metrics of chatbots 5. The assessment should include a score. The score should  be between 0 and 100, where 100 is the best possible score.
+
+The final prompt should ask me to enter the conversational interaction.
+
+AI: Here is a state-of-the-art evaluation prompt you can use to assess your conversational AI system. It's designed to be used as a LLM-as-a-Judge evaluator - just copy/paste it into any powerful LLM.
+
+User: No, I'd like for you to perform this process. Ask me to enter a conversational history from the system I designed.
+
+AI: Got it. I will perform the evaluation directly.
+
+I will assess your system using 5 state-of-the-art conversational AI evaluation metrics:
+
+Coherence & Contextual Consistency (FED / MT-Bench)
+Relevance & Sensibleness/Specificity (SSA)
+Fluency & Naturalness (BERTScore / G-Eval)
+Helpfulness & Informativeness (HELM)
+Safety, Empathy & Harmlessness (HHH)
+I will give you a breakdown for each metric and a final weighted score from 0 to 100, where 100 is perfect.
+
+Please paste the full conversational history from the system you designed below.
+
+Use this format:
+User: ...
+AI: ...
+User: ...

@@ -1,0 +1,73 @@
+User: I'd like for you to emulate a process wherein you critically review a scientific article. The review should follow the guidelines for the Association for Computational Linguistics conference proceedings. Here is the link where you can find the information on reviewer guidlines: https://aclrollingreview.org/reviewerguidelines.
+
+Ask me to enter the text of the paper.
+
+AI: I will emulate a full ACL Rolling Review process for you, strictly following the official guidelines you linked: https://aclrollingreview.org/reviewerguidelines and the official review form https://aclrollingreview.org/reviewform.
+
+Here is how I will run it:
+
+My workflow (per ACL ARR Task 1-3):
+
+Assignment Check - I will first skim for COI, anonymity violations, appropriateness, and desk-reject criteria [Checklist: Appropriateness, Hallucinated refs, Anonymity, Length, Limitations section, Responsible NLP Checklist, Ethics].
+First Read (Skim) - Adjust Expectations - I will identify: What is the research question? What type of contribution is it (engineering, resource, analysis, position, theory, reproduction)? Is the claim appropriately scoped for long/short? I will NOT look at results yet to avoid hindsight bias.
+Second Read (In-depth) - Technical Review - Evaluate soundness, methodology, and claim validity, checking for common paper issues:
+M: M1 LLM-eval without validation, M2 Reproducibility, M3 Undisclosed data issues, M4 Unmotivated selection, M5 Incomplete proofs
+T: T1 Ethics, T2 License/release
+R: R1 Analysis/p-hacking, R2 Inappropriate scope, R3 Speculation as conclusion, R4 Overclaiming, R5 Missing significance
+G: G1 Unclear RQ, G2 Bad precedent, G3 Missing related work, G4 Vague terms, G5 Misleading citations
+Review Writing - I will produce a review that is specific (I1), avoids illegitimate critiques H1-H17, is professional/neutral (I4), and where scores match text (I3).
+The output will be in the exact ARR form:
+
+Paper Summary
+Summary of Strengths (numbered)
+Summary of Weaknesses (numbered, specific: X misses Y not X is unclear)
+Suggestions for Improvement
+Scores (per ARR scale):
+Soundness: 1-5
+Excitement: 1-5
+Overall Assessment: 1-5 (1=Do not resubmit, 2=Resubmit next cycle, 3=Findings, 4=Conference, 5=Award)
+Confidence: 1-5
+Reproducibility: 1-5, Datasets: 1-5, Software: 1-5
+Limitations & Societal Impact check
+Ethical Concerns / Needs Ethics Review
+I will also flag if any weaknesses fall under H1-H17 (e.g., H5 "not SOTA", H7 "too simple", H13 "extra experiment X") to ensure compliance.
+
+Please paste the full text of the paper now.
+
+If it's a PDF, you can upload it directly, or paste text including title, abstract, main body, references, and limitations section.
+
+User: Wait, I need to make one change to my original request. I'd like for the final score to be on a scale from 0 to 100 points, with 100 as the best score. Now, ask me to paste the full text of the paper.
+
+AI: Got it — making that change.
+
+I will still run the full ACL Rolling Review process per https://aclrollingreview.org/reviewerguidelines (two-pass reading, specificity check I1, avoiding H1-H17 illegitimate critiques, score-text consistency I3, professional tone I4, and checks for M/T/R/G paper issues), but with your custom scoring modification:
+
+Final score will be reported on a 0-100 scale (100 = best), in addition to the standard ARR sub-scores for transparency. I will map the ARR Overall Assessment to the 0-100 scale and justify the number directly from the written review.
+
+Final output will include:
+
+Paper Summary
+Summary of Strengths
+Summary of Weaknesses (numbered, specific)
+Suggestions
+Detailed Scores: Soundness, Excitement, Confidence, Reproducibility etc. (ARR 1-5 scales)
+Overall Assessment: 0-100 points + justification + equivalent ARR recommendation
+Please paste the full text of the paper now — title, abstract, main body, limitations, and references. If you have a PDF, you can upload it here.
+
+User: Here it is, in Latex format.
+[Article omitted]
+
+AI: Here is a full critical review emulating the ACL Rolling Review process per the guidelines at https://aclrollingreview.org/reviewerguidelines and the official review form https://aclrollingreview.org/reviewform.
+
+I completed Task 1-3: Assignment check, skim-read for expectations, and in-depth technical read, checking for common review issues H1-H17 and common paper issues M/T/R/G.
+
+[Full review content provided – first review with score 45/100]
+
+User: Here is the revised article:
+[Revised article omitted]
+
+AI: This is a re-review as a repeat reviewer per ARR guidelines – I have read your revision notes (W1-W4, S3/S4) and checked to what extent previous weaknesses were addressed. This review supersedes the initial review.
+
+[Full re-review content provided – second review with score 78/100]
+
+User: Copy all the conversational interactions of this session with the user messages denoted by "User:" and the AI responses denoted by "AI:". Do not include the pasted article.

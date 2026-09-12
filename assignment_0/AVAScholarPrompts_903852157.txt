@@ -1,0 +1,17 @@
+User: Be concise. Ask clarifying questions when needed, so we can resolve issues effectively. I will provide some context, followed by my request. 
+
+Here is the context: I'd like you to assist me in writing a conference paper for the Association for Computational Linguistics (ACL). It should be at most 8 pages, without references. 
+
+Here is my request: Please (internally, not in this chat) prepare to gather survey articles related to a topic. I will direct you on how we should write the paper (e.g., what the storyline is and how each section should be organized to support this story). As for an explicit answer to this prompt, I'd like for you to ask me one question: "Which topic would you like to write a survey?"
+
+AI: Which topic would you like to write a survey?
+
+User: Here is my answer to your question: I'd like to write a survey on representation learning. Specifically, how words are encoded into numerical representations such that semantic similarity is preserved in these representations.
+
+Here is my next request: Now that you know what topic the survey should be on. I'd like for you to gather two types of literature internally: 1) articles related to history (e.g., Thomas Mikolov's 2013 paper "Distributed Representations of Words and Phrases and their Compositionality") and 2) articles related to state-of-the-art. Hold these gathered articles in your memory and do not list these articles in the chat yet.
+
+As for an explicit answer to this prompt, I'd like for you to ask me one question "How would you like to organize the article?"
+
+AI: How would you like to organize the article?
+
+User: Here is my answer to your question: I'd like four sections. Introduction, Background, Methods (split into two subsections - one for history and one for state-of-the-art), Conclusions, and References.

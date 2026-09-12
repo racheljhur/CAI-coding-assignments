@@ -1,0 +1,93 @@
+User: Be concise. Ask clarifying questions when needed, so we can resolve issues effectively. I will provide some context, followed by my request. 
+
+Here is the context: I'd like you to assist me in writing a conference paper for the Association for Computational Linguistics (ACL). It should be at most 8 pages, without references. 
+
+Here is my request: Please (internally, not in this chat) prepare to gather survey articles related to a topic. I will direct you on how we should write the paper (e.g., what the storyline is and how each section should be organized to support this story). As for an explicit answer to this prompt, I'd like for you to ask me one question: "Which topic would you like to write a survey?"
+
+AI: Which topic would you like to write a survey?
+
+User: Here is my answer to your question: I'd like to write a survey on representation learning. Specifically, how words are encoded into numerical representations such that semantic similarity is preserved in these representations.
+
+Here is my next request: Now that you know what topic the survey should be on. I'd like for you to gather two types of literature internally: 1) articles related to history (e.g., Thomas Mikolov's 2013 paper "Distributed Representations of Words and Phrases and their Compositionality") and 2) articles related to state-of-the-art. Hold these gathered articles in your memory and do not list these articles in the chat yet.
+
+As for an explicit answer to this prompt, I'd like for you to ask me one question "How would you like to organize the article?"
+
+AI: How would you like to organize the article?
+
+User: Here is my answer to your question: I'd like four sections. Introduction, Background, Methods (split into two subsections - one for history and one for state-of-the-art), Conclusions, and References.
+
+Here is my next request: I'd like for you to now help me write the article. The storyline will broadly be that detecting and understanding concepts in the representation space to prepare the model to steer the model towards a particular output type is challenging. With the storyline laid out, I'd like help writing the article (section-by-section). Please write the introduction in the chat.
+
+AI: Provided the draft Introduction for your 4-section structure, framed around the requested storyline.
+
+User: Here is my answer to your question: not yet.
+
+Here is my next request: Please return the same introduction with citations written in Latex format. And internally, be prepared to provide a bibtex file at the end of this session.
+
+AI: Provided the introduction in Latex format.
+
+User: Here is my next request: please write the next section (the background) on distributional semantics and similarity-preserving embeddings. Provide equations, where needed. After you have finished, ask me if I'd like to write the next section on Methods next.
+
+AI: Provided the Background section. Would you like me to write the next section on Methods next?
+
+User: Here is my answer to your question: not yet.
+
+Here is my next request: return the same background, but re-write the equations in latex format.
+
+AI: Provided the Background section with equations in LaTeX format:
+
+User: Here is my next request: Now that you know that I'd like my sections written in latex format, please write the methods section (3), split into those two subsections as I mentioned earlier.
+
+AI: Provided the Methods section 3.1 and 3.2 in LaTeX format.
+
+User: These equations are not in Latex format. I cannot copy these into Overleaf. The equations should look (for instance) like this $\alpha^2 = x + b$ or like this 
+\begin{equation}
+  \label{eq:example}
+  A = \pi r^2
+\end{equation}
+
+AI: You are right — here is the Background section with copy-paste ready LaTeX for Overleaf. You can paste this directly.
+
+User: Here is my next request: Now that you know that I'd like my sections written in latex format, please write the methods section (3), split into those two subsections as I mentioned earlier.
+
+AI: provided the Methods section in Latex.
+
+User: Now, I'd like for you to write the Conclusions section. Specifically, I'd like for you to highlight the key methods we adopted from historical methods, what was lacking, what we did to address these limitations in current approaches, as well as what they additionally sought out to do, and close by commenting on limitations and future outlook.
+
+AI: Provided the Conclusions section in LaTeX.
+
+User: Please return the same conclusions without the bolded header text. I'd like a cohesive paragraph, unseparated by these section headings.
+
+AI: Provided the same Conclusions as a cohesive paragraph in LaTeX.
+
+User: With the entire survey written, please provide an abstract.
+
+AI: Provided the Abstract in LaTeX.
+
+User: This is the entire Latex-formatted survey. It is currently 4 pages, and I need to hit 8. Can you extend each section accordingly?
+
+AI: Provided an expanded version of the survey intended to reach 8 pages.
+
+User: So, this is still four pages (the ACL conference paper format uses double columns). Could you extend this to 8? This is not considering references. I will request references afterwards, so do not generate this yet.
+
+AI: Provided an expanded double-column 8-page version.
+
+User: Please give me a separate references section to finish off this article, as well as the associated BibTex file.
+
+AI: Provided references.bib file and a manual References section.
+
+User: This is the entire document. Some of the references are still missing?
+
+AI: Explained the LaTeX package issues causing missing references and provided a fixed main.tex.
+
+User: In response to your question: No. Here are separate requests related to the same task. Can you split this equation into two lines? Currently, it is bleeding into the neighboring column.
+
+AI: Provided a column-safe split version of the eq:disentangle equation.
+
+User: Do the same thing for this: [cbow equation]
+
+AI: Provided a column-safe split version of the eq:cbow equation.
+
+User: As my final request. Can you return each of my prompts, separated by one return?
+
+AI: Returned a list of all your prompts.
