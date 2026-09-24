@@ -19,17 +19,21 @@ from pathlib import Path
 from typing import Literal
 
 
-DATA_DIR = Path(__file__).parent / "data" / "atis"
-Split = Literal["train", "dev", "test"]
+DATA_DIR = Path(__file__).parent / "data" / "atis"  # __file__ is is a Python variable containing the path of the current Python file
+                                                    # Path() is a part of python's standard library pathlib, converting the str path
+                                                    # into a path object. the .parent() attribute contains the directory of the path
+                                                    # object.
+Split = Literal["train", "dev", "test"] # a Literal container restricts the datatype to these values (here, all strings)
 SPLIT_DIRS: dict[Split, str] = {"train": "train", "dev": "valid", "test": "test"}
 
-
-@dataclass
+@dataclass  # decorator that automatically generates some of the repetitive code 
+            # you'd normally write for a class whose main purpose is to hold data
 class Example:
     tokens: list[str]
     slots: list[str]
     intent: str
 
+# the above codeblock essentially auto-creates the lengthy __init__() constructor for you.
 
 def load_split(split: Split, data_dir: Path = DATA_DIR) -> list[Example]:
     """Reads one split (train/dev/test) into a list of Examples."""
@@ -108,6 +112,7 @@ if __name__ == "__main__":
     data = load_atis()
     for split, examples in data.items():
         print(f"{split:5s}: {len(examples):5d} examples")
+
 
     print(f"slot labels: {len(slot_label_set(data['train']))}")
     print(f"intents:     {len(intent_label_set(data['train']))}")

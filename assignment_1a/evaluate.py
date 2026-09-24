@@ -20,7 +20,7 @@ import argparse
 import os
 from types import SimpleNamespace
 from typing import Any, Literal
-
+from scorer import *
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for an evaluation run."""
@@ -41,6 +41,13 @@ def parse_args() -> argparse.Namespace:
         type=str,
         required=True,
         help="Directory containing the trained model to load.",
+    )
+
+    parser.add_argument(
+        "--train-fraction",
+        type=float,
+        required=True,
+        help="Fraction of training set to use, e.g. 0.05 / 0.10 / 0.25 / 1.00.",
     )
 
     parser.add_argument(
@@ -67,16 +74,18 @@ def load_model(model_type: str, checkpoint_dir: str) -> Any:
                   matching the mapping `BiLSTMModel.predict()` expects).
     """
     model: Any
-
+    
+    trainFrac = args.train_fraction
     if model_type == "crf":
         # --- Integration point: `models/crf.py` ------------------------------
         # Same dispatch pattern as `train.py`'s `build_model()`.
         from models.crf import CRFModel
-
         import joblib
-
+        
+        # note that joblib speeds up disk-based caching
+        
         model = CRFModel()
-        model.model = joblib.load(os.path.join(checkpoint_dir, "crf_model.pkl"))
+        model.model = joblib.load(os.path.join(checkpoint_dir, f"crf_{trainFrac}.pkl"))
         return model
         # ---------------------------------------------------------------------
 
@@ -88,7 +97,7 @@ def load_model(model_type: str, checkpoint_dir: str) -> Any:
         import torch
 
         checkpoint = torch.load(
-            os.path.join(checkpoint_dir, "bilstm_model.pt"), map_location="cpu"
+            os.path.join(checkpoint_dir, "bilstm_{trainFrac}.pt"), map_location="cpu"
         )
 
         model = BiLSTMModel(
@@ -137,8 +146,12 @@ def compute_metrics(
         A dict with at least the keys `"token_f1"` and `"span_f1"`.
     """
     # ------------------------------------------------------------------
-    # TODO: implement
-    #
+    # grab and store f1 metrics.
+    # 
+    f1Metrics = {}
+    f1Metrics['tokens'] = token_scores(gold predictions)['f1']
+    f1Metrics['span'] = span_scores(gold, predictions)['f1'] 
+    
     # `scorer.py` exposes (confirmed, not speculative):
     #     token_scores(y_true, y_pred) -> {"precision": ..., "recall": ..., "f1": ...}
     #     span_scores(y_true, y_pred)  -> {"precision": ..., "recall": ..., "f1": ...}
