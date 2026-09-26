@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 class BiLSTMModel(nn.Module):
     def __init__(
@@ -33,13 +33,24 @@ class BiLSTMModel(nn.Module):
                 output is `2 * hidden_dim`).
         """
         super().__init__()
+        # torch.nn.embedding:
+        #   A simple lookup table that stores embeddings of a fixed dictionary and size.
+        #   This module is often used to store word embeddings and retrieve them using indices.
+        #   The input to the module is a list of indices, and the output is the corresponding word embeddings.
+        #   
+        #   args:
+        #       num_embeddings
+        #       embedding_dim
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
+
         self.lstm = nn.LSTM(
             input_size=embedding_dim,
             hidden_size=hidden_dim,
             bidirectional=True,
             batch_first=True,
         )
+
+        # we do this to prepare the embeddings for the forward and backward passes.
         self.hidden2tag = nn.Linear(2 * hidden_dim, tagset_size)
 
         # Optional +5 bonus: a handwritten CRF decoding layer (forward/Viterbi)
@@ -47,6 +58,7 @@ class BiLSTMModel(nn.Module):
         # `self.crf = CRFLayer(tagset_size)` applied to the output of
         # `hidden2tag` in `forward()`/`predict()`. Not built here — the base
         # BiLSTM already produces per-token softmax logits as specified.
+        
 
     def forward(
         self, sentences_batch: torch.Tensor, lengths: torch.Tensor
@@ -66,8 +78,45 @@ class BiLSTMModel(nn.Module):
             `(batch_size, max_seq_len, tagset_size)` tensor of per-token,
             per-tag logits (unnormalized — softmax/cross-entropy is applied outside this method).
         """
+       
         # ------------------------------------------------------------------
-        # TODO: implement
+        # forward lstm pass 
+        # you are essentially learning the encoder here - takes an embedding,
+        # transforms it into a continuous space representation,
+        # and learns any dependency structures.
+        # 
+        # based on mesnil et al, 2013 (rnns for slot filling), you could either
+        # a) compute a one-hot encoding of every token in the vocabulary
+        # b) just randomly initialize some value for each entry of the d-dim embedding
+        # 
+        # then pass it through the biLSTM.
+        # note that sentences_batch is already padded for you.
+       
+        max_seq_len = torch.max(lengths)
+        embeds = self.embedding(sentences_batch) 
+        
+        # pack_padded_sequence returns a packed sequence, which
+        # holds the data and list of batch_sizes of a packed sequence.
+        # if you had tensor([1, 0, 0], [1, 2, 0], [1, 2, 3])
+        # the packed version would be [1 1 2 2 2 3] - it will pack in order of sequence length, per entry.
+        packed = nn.utils.rnn.pack_padded_sequence(embeds, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        
+        packed_out, _ = self.lstm(packed)
+
+        h, _ = nn.utils.rnn.pad_packed_sequence(
+                packed_out, batch_first=True,
+                total_length=sentences_batch.size(1),          
+                )                                               # (batch_size, L, 2h)
+
+        print(f'hidden layer shape (pre-hidden2tag pass) {h.size()}')
+        h2tag = self.hidden2tag(h) # no layer normalization is needed.
+
+        return h2tag
+
+        # (v2) random inits
+        if False:
+            embeds = 0 
+        
         # ------------------------------------------------------------------
         raise NotImplementedError("forward() is left for you to implement.")
 

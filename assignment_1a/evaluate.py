@@ -149,8 +149,8 @@ def compute_metrics(
     # grab and store f1 metrics.
     # 
     f1Metrics = {}
-    f1Metrics['tokens'] = token_scores(gold predictions)['f1']
-    f1Metrics['span'] = span_scores(gold, predictions)['f1'] 
+    f1Metrics['token_f1'] = token_scores(gold predictions)['f1']
+    f1Metrics['span_f1'] = span_scores(gold, predictions)['f1'] 
     
     # `scorer.py` exposes (confirmed, not speculative):
     #     token_scores(y_true, y_pred) -> {"precision": ..., "recall": ..., "f1": ...}

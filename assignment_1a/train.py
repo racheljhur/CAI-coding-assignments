@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import random
 from collections import Counter
+from evaluate import *
 from typing import Any
 import numpy as np
 import torch
@@ -210,6 +211,38 @@ def build_model(
 
     raise ValueError(f"Unknown model type: {model_type!r}")
 
+# Source - https://stackoverflow.com/a/73704579
+# Posted by isle_of_gods, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-09-26, License - CC BY-SA 4.0
+
+class EarlyStopper:
+    def __init__(self, patience = 1, min_delta = 0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = float('inf')
+
+    # the idea behind this logic is that we set a max count (patience) for
+    # our validation loss to go below some a priori set minimum. if it falls
+    # below this, we reset the counter and we keep learning.
+    # if the validation loss is strictly greater than the minimum plus some
+    # we increase the counter. since the counter is greater than the patience
+    # value, the early_stop returns True, which can be used in a break condition.
+
+    # tldr: we stop if the validation loss is above a set value.
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+
+
+for epoch in np.arange(n_epochs):
+    train_loss = train_one_epoch(model, train_loader)
 
 def train_loop(
     model: Any,
@@ -217,7 +250,8 @@ def train_loop(
     yTrain: Any,
     dev_data: Any,
     args: argparse.Namespace,
-) -> float:
+    numEpochs: int | None = None, # type hints always come before default assignments.
+    ) -> float:
     """Train `model` on `train_data`, validating against `dev_data`.
 
     This is the part you implement.
@@ -243,17 +277,68 @@ def train_loop(
     #
     checkPointDir = args.checkpoint_dir
     trainFrac = args.train_fraction
-    os.makedirs(checkPointDir, exist_ok=True)
+    tensorBoardDir = args.tensorboard_logdir
+    os.makedirs(checkPointDir, exist_ok = True)
+    os.makedirs(tensorBoardDir, exist_ok = True)
+
+    xDev, yDev = dev_data
 
     if model.model_type == 'crf': 
         # model instance is passed in as an argument. override the default filename.
-        model.model.model_filename = os.path.join(f'{checkPointDir}', f'crf_{trainFrac}.pkl')
-        return model.fit(xTrain, yTrain)
-        
-    else:
-        tmp = 0 
-        # TODO - implement bilstm training loop.
+        model.model.model_filename = os.path.join(f'{checkPointDir}', f'crf_{trainFrac}.pkl')        
+        model.fit(xTrain, yTrain)
 
+        yPred = model.predict(xDev)
+        # compute_metrics kwargs:
+        #   predictions: list[list[str]], gold: list[list[str]] 
+        #   returns token level and span level f1 scores.
+        # 
+        #   NOTE - you pass in the ground truth first!
+        dev_f1 = compute_metrics(yDev, yPred)[1] # span level
+        
+        print(f"CRF dev slot F1: {dev_f1:.4f}")
+        
+        return dev_f1 
+
+    else:
+        criterion = nn.MSELoss() 
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+        writer = torch.utils.tensorboard.SummaryWriter(log_dir = str(tensorBoardDir))
+        early_stopper = EarlyStopper(patience=3, min_delta=10)
+        
+        for epoch in range(num_epochs):
+            model.train()
+
+            outputs = model(xTrain)
+            loss = criterion(outputs, yTrain)
+            
+            outputsVal = model(xDev)
+            validation_loss = criterion(outputs, yDev)
+
+            if early_stopper.early_stop(validation_loss):             
+                break
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            if (epoch + 1) % 20 == 0:
+                print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}") 
+                
+                dev_f1 = compute_metrics(yDev, outputsVal)[1]
+
+                # log training progress.
+                # tensorboard.SummaryWriter():
+                # The SummaryWriter class is your main entry to log data for consumption and visualization by TensorBoard
+                writer.add_scalar("loss/train", train_loss, epoch)
+                writer.add_scalar("f1/dev", dev_f1, epoch)
+ 
+        dev_f1 = compute_dev(yDev, outputsVal)[1]
+        print(f"biLSTM dev slot F1: {dev_f1:.4f}"
+
+        torch.save(model, checkPointDir + f'/bilstm_{trainFrac}.pth') 
+        writer.close()
+        return dev_f1 
     # ------------------------------------------------------------------ 
 
     raise NotImplementedError("train_loop() is left for you to implement.")
