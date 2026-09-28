@@ -1,1 +1,4 @@
 *.txt
+/tensorBoard
+glove*
+dolma*
