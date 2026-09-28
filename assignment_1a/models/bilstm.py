@@ -43,15 +43,29 @@ class BiLSTMModel(nn.Module):
         #       embedding_dim
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
 
+        # an lstm will 1) use the same weights to scale the preceding node (t-1), and compute forget, input, and output values
+        # to be used to update a cell state. a bilstm is a bit more involved but it does this using (t-1) and (t+1) so it stores
+        # a bit more computed values to update the current state.
+        # when you add more layers, you are deepening in the vertical direction: 
+        # y_t > y_(t+1)
+        # ^
+        # h_t(2) > h_(t+1)(2) 
+        # ^
+        # h_t(1) > h_(t+1)(1)
+        # ^
+        # x_t > x_(t+1)
         self.lstm = nn.LSTM(
             input_size=embedding_dim,
             hidden_size=hidden_dim,
+            num_layers=1,
             bidirectional=True,
             batch_first=True,
         )
 
         # we do this to prepare the embeddings for the forward and backward passes.
         self.hidden2tag = nn.Linear(2 * hidden_dim, tagset_size)
+
+        self.model_type = 'bilstm'
 
         # Optional +5 bonus: a handwritten CRF decoding layer (forward/Viterbi)
         # on top of the BiLSTM emissions could be added here, e.g. as
@@ -87,12 +101,12 @@ class BiLSTMModel(nn.Module):
         # 
         # based on mesnil et al, 2013 (rnns for slot filling), you could either
         # a) compute a one-hot encoding of every token in the vocabulary
-        # b) just randomly initialize some value for each entry of the d-dim embedding
+        # b) just randomly initialize some value for each entry of the d-dim embedding - THIS IS WHAT WE DO HERE.
         # 
         # then pass it through the biLSTM.
-        # note that sentences_batch is already padded for you.
-       
-        max_seq_len = torch.max(lengths)
+        # note that sentences_batch is already padded for you.       
+        
+        # NOTE - embedding takes in something that is already numerically encoded. i've used the vocab['token_to_id'] to do this.
         embeds = self.embedding(sentences_batch) 
         
         # pack_padded_sequence returns a packed sequence, which
@@ -100,7 +114,7 @@ class BiLSTMModel(nn.Module):
         # if you had tensor([1, 0, 0], [1, 2, 0], [1, 2, 3])
         # the packed version would be [1 1 2 2 2 3] - it will pack in order of sequence length, per entry.
         packed = nn.utils.rnn.pack_padded_sequence(embeds, lengths.cpu(), batch_first=True, enforce_sorted=False)
-        
+
         packed_out, _ = self.lstm(packed)
 
         h, _ = nn.utils.rnn.pad_packed_sequence(
@@ -108,14 +122,12 @@ class BiLSTMModel(nn.Module):
                 total_length=sentences_batch.size(1),          
                 )                                               # (batch_size, L, 2h)
 
-        print(f'hidden layer shape (pre-hidden2tag pass) {h.size()}')
+        # i think you need to squeeze this to be (batch_size, 256)
+
+        #print(f'hidden layer shape (pre-hidden2tag pass) {h.size()}') # (batch_size, 42, 256)
         h2tag = self.hidden2tag(h) # no layer normalization is needed.
 
         return h2tag
-
-        # (v2) random inits
-        if False:
-            embeds = 0 
         
         # ------------------------------------------------------------------
         raise NotImplementedError("forward() is left for you to implement.")
@@ -173,9 +185,9 @@ class BiLSTMModel(nn.Module):
             aligned token-for-token with `sentences`.
         """
         # --- Integration point: `data_loader.py`'s vocab interface. ---------
-        unk_id = vocab.token_to_id.get("<UNK>", 0)
+        unk_id = vocab['token_to_id'].get("<UNK>", 0)
         id_sequences = [
-            [vocab.token_to_id.get(token, unk_id) for token in sentence]
+            [vocab['token_to_id'].get(token, unk_id) for token in sentence]
             for sentence in sentences
         ]
         # ---------------------------------------------------------------------
@@ -202,6 +214,6 @@ class BiLSTMModel(nn.Module):
 
         for idx, length in enumerate(lengths.tolist()):
             tag_ids = predicted_ids[idx, :length].tolist()
-            predictions.append([vocab.id_to_tag[tag_id] for tag_id in tag_ids])
+            predictions.append([vocab['id_to_tag'][tag_id] for tag_id in tag_ids])
 
         return predictions

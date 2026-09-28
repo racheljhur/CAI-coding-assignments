@@ -66,32 +66,33 @@ class CRFModel:
         # per sentence, append a dictionary per token.
         #
         all_features = []
-        for t, word in enumerate(sentence):
-            features = {
-                'bias': 1.0,
-                'word.lower()': word.lower(),
-                'word[-3:]': word[-3:],   # suffix features (here, i am making an assumption 
-                                          # that the last three letters is a suitable suffix for most words in my corpus)
-                'word[-2:]': word[-2:],
-                'word.isdigit()': word.isdigit(),
-            }
+        if False:
+            for t, word in enumerate(sentence):
+                features = {
+                    'bias': 1.0,
+                    'word.lower()': word.lower(),
+                    'word[-3:]': word[-3:],   # suffix features (here, i am making an assumption 
+                                              # that the last three letters is a suitable suffix for most words in my corpus)
+                    'word[-2:]': word[-2:],
+                    'word.isdigit()': word.isdigit(),
+                }
 
-            if t == 0:
-                features['BOS'] = True
-            else:
-                prev = sentence[t - 1]
-                features.update({
-                    '-1:word.lower()': prev.lower(),
-                })
+                if t == 0:
+                    features['BOS'] = True
+                else:
+                    prev = sentence[t - 1]
+                    features.update({
+                        '-1:word.lower()': prev.lower(),
+                    })
 
-            if t == len(sentence) - 1:
-                features['EOS'] = True
-            else:
-                nxt = sentence[t + 1]
-                features.update({
-                    '+1:word.lower()': nxt.lower(),
-                })
-            all_features.append(features)
+                if t == len(sentence) - 1:
+                    features['EOS'] = True
+                else:
+                    nxt = sentence[t + 1]
+                    features.update({
+                        '+1:word.lower()': nxt.lower(),
+                    })
+                all_features.append(features)
 
         # ------------------------------------------------------------------
 
@@ -100,31 +101,42 @@ class CRFModel:
         # ------------------------------------------------------------------
         # feature engineering (v2) 
         # toggle to True.
-        if False:
-            # the following conditionals only activate for intermediate tokens.
-            if t > 0:
-                word1 = sentence[t - 1][0] # this is the first character in every preceding token
-                #postag1 = sent[t-1][1]
-                features.update({
-                    '-1:word.lower()': word1.lower(),
-                    '-1:word.istitle()': word1.istitle(),
-                    '-1:word.isupper()': word1.isupper(),
-                    #'-1:postag': postag1,
-                    #'-1:postag[:2]': postag1[:2],
-                })
-            else:
-                features['BOS'] = True
+        if True:
+            for t, word in enumerate(sentence):
+                features = {
+                    'bias': 1.0,
+                    'word.lower()': word.lower(),
+                    'word[-3:]': word[-3:],
+                    'word[-2:]': word[-2:],
+                    'word.isdigit()': word.isdigit(),
+                    'word.istitle()': word.istitle(),
+                    'word.isupper()': word.isupper(),
+                }
 
-            if t < len(sentence) - 1:
-                word1 = sentence[t + 1][0] # this is the first character in every subsequent token
-                #postag1 = sent[t+1][1]
-                features.update({
-                    '+1:word.lower()': word1.lower(),
-                    '+1:word.istitle()': word1.istitle(),
-                    '+1:word.isupper()': word1.isupper(),
-                    #'+1:postag': postag1,
-                    #'+1:postag[:2]': postag1[:2],
-                })
+                # previous token
+                if t > 0:
+                    prev = sentence[t - 1]
+                    features.update({
+                        '-1:word.lower()': prev.lower(),
+                        '-1:word.istitle()': prev.istitle(),
+                        '-1:word.isupper()': prev.isupper(),
+                    })
+                else:
+                    features['BOS'] = True
+
+                # next token
+                if t < len(sentence) - 1:
+                    nxt = sentence[t + 1]
+                    features.update({
+                        '+1:word.lower()': nxt.lower(),
+                        '+1:word.istitle()': nxt.istitle(),
+                        '+1:word.isupper()': nxt.isupper(),
+                    })
+                else:
+                    features['EOS'] = True
+
+                all_features.append(features)
+
 
         return all_features # if implemented, the function returns the dict - the error is not invoked.
         # ------------------------------------------------------------------

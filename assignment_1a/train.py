@@ -16,8 +16,11 @@ import random
 from collections import Counter
 from evaluate import *
 from typing import Any
-import numpy as np
+import data_loader
 import torch
+from torch.utils.tensorboard import SummaryWriter
+import copy
+import numpy as np
 import os
 
 def parse_args() -> argparse.Namespace:
@@ -53,6 +56,13 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=42,
         help="Random seed for reproducibility (default: 42).",
+    )
+
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=100,
+        help="numEpochs (for biLSTM only) (default=100)",
     )
 
     parser.add_argument(
@@ -115,6 +125,11 @@ def load_data(fraction: float, seed: int) -> tuple[Any, Any, Any, Any]:
     vocab = build_vocab(train_sentences)
     vocab["tagset_size"] = len(data_loader.slot_label_set(train_data))
 
+    # adding some extra keys for the bilstm model. 
+    tags = sorted(data_loader.slot_label_set(train_data))
+    vocab["tag_to_id"] = {t: i for i, t in enumerate(tags)} 
+    vocab["id_to_tag"] = {i: t for t, i in vocab["tag_to_id"].items()}
+
     return train_data, dev_data, test_data, vocab
 
 
@@ -143,6 +158,8 @@ def build_vocab(train_sentences: list[list[str]]) -> dict[str, Any]:
         A dict with `token_to_id` (Dict[str, int]), `id_to_token`
         (Dict[int, str]), and `vocab_size` (int).
     """
+    # note - i don't think you should make the vocab more granular (by tokenizing at the character level)
+    # instead, you should check how the word-level embeddings can be improved.
     counts = Counter(token for sentence in train_sentences for token in sentence) # count the number of times a token appears in all sentences.
                                                                                   # Counter(str) is indexable by the str. returns the count.
 
@@ -240,17 +257,14 @@ class EarlyStopper:
                 return True
         return False
 
-
-for epoch in np.arange(n_epochs):
-    train_loss = train_one_epoch(model, train_loader)
-
 def train_loop(
     model: Any,
     xTrain: Any,
     yTrain: Any,
-    dev_data: Any,
+    xDev: Any,
+    yDev:Any,
+    vocab:Any,
     args: argparse.Namespace,
-    numEpochs: int | None = None, # type hints always come before default assignments.
     ) -> float:
     """Train `model` on `train_data`, validating against `dev_data`.
 
@@ -277,11 +291,9 @@ def train_loop(
     #
     checkPointDir = args.checkpoint_dir
     trainFrac = args.train_fraction
-    tensorBoardDir = args.tensorboard_logdir
+    num_epochs = args.epochs
+    
     os.makedirs(checkPointDir, exist_ok = True)
-    os.makedirs(tensorBoardDir, exist_ok = True)
-
-    xDev, yDev = dev_data
 
     if model.model_type == 'crf': 
         # model instance is passed in as an argument. override the default filename.
@@ -294,51 +306,81 @@ def train_loop(
         #   returns token level and span level f1 scores.
         # 
         #   NOTE - you pass in the ground truth first!
-        dev_f1 = compute_metrics(yDev, yPred)[1] # span level
+        dev_f1_span = compute_metrics(yDev, yPred)['span_f1']
+        dev_f1_token = compute_metrics(yDev, yPred)['token_f1']
+
+        print(f"CRF dev F1 (span level): {dev_f1_span:.4f}")
+        print(f"CRF dev F1 (token level): {dev_f1_token:.4f}")
         
-        print(f"CRF dev slot F1: {dev_f1:.4f}")
-        
-        return dev_f1 
+        return dev_f1_span, dev_f1_token 
 
     else:
-        criterion = nn.MSELoss() 
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        writer = torch.utils.tensorboard.SummaryWriter(log_dir = str(tensorBoardDir))
-        early_stopper = EarlyStopper(patience=3, min_delta=10)
-        
-        for epoch in range(num_epochs):
+        tensorBoardDir = args.tensorboard_logdir or os.path.join("runs", f"bilstm_{trainFrac}")
+        os.makedirs(tensorBoardDir, exist_ok=True)
+        writer = SummaryWriter(log_dir=tensorBoardDir)
+
+        criterion = torch.nn.CrossEntropyLoss(ignore_index=-100)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        early_stopper = EarlyStopper(patience=10, min_delta=0.0)
+
+        best_span, best_token, best_state = -1.0, None, None
+
+        # the following block takes the known token > id map
+        # and transforms every token in xTrain to a tensor of ids.
+        # this is a necessary step, prior to the random encoding 
+        # done by the BiLSTM.nn.embedding() method.
+        unk = vocab['token_to_id']["<UNK>"]
+        lengths = torch.tensor([len(sent) for sent in xTrain], dtype = torch.long)
+        xTrain_ids = torch.zeros((len(xTrain), int(lengths.max())), dtype=torch.long) 
+        for i, s in enumerate(xTrain):
+            xTrain_ids[i, :len(s)] = torch.tensor([vocab['token_to_id'].get(w, unk) for w in s])
+
+        # i think we need to convert the tags in yTrain into something passable into
+        # the cross entropy loss.
+        # the -100 is a safeproof measure so the loss ignores missing ids, but i think tag_to_id
+        # should map every training tag to some value.
+        yTrain_ids = torch.full((len(yTrain), int(lengths.max())), -100, dtype=torch.long)
+        for i, slots in enumerate(yTrain):
+            yTrain_ids[i, :len(slots)] = torch.tensor([vocab['tag_to_id'][slot] for slot in slots])
+
+        print(xTrain_ids.size()), print(yTrain_ids.size())
+
+        for epoch in range(num_epochs): 
             model.train()
+            optimizer.zero_grad() 
 
-            outputs = model(xTrain)
-            loss = criterion(outputs, yTrain)
-            
-            outputsVal = model(xDev)
-            validation_loss = criterion(outputs, yDev)
+            yPred = model(xTrain_ids, lengths)  
 
-            if early_stopper.early_stop(validation_loss):             
-                break
-
-            optimizer.zero_grad()
+            loss = criterion(yPred.reshape(-1, yPred.size(-1)), yTrain_ids.reshape(-1))
             loss.backward()
             optimizer.step()
 
+            m = compute_metrics(model.predict(xDev, vocab), yDev)
+
+            writer.add_scalar("loss/train", loss.item(), epoch)
+            writer.add_scalar("f1_span/dev", m["span_f1"], epoch)
+            writer.add_scalar("f1_token/dev", m["token_f1"], epoch)
+
+            if m["span_f1"] > best_span:
+                best_span, best_token = m["span_f1"], m["token_f1"]
+                best_state = copy.deepcopy(model.state_dict())
+
             if (epoch + 1) % 20 == 0:
-                print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}") 
-                
-                dev_f1 = compute_metrics(yDev, outputsVal)[1]
+                print(f"Epoch [{epoch+1}/{num_epochs}] loss {loss.item():.4f} "
+                      f"dev span F1 {m['span_f1']:.4f}")
 
-                # log training progress.
-                # tensorboard.SummaryWriter():
-                # The SummaryWriter class is your main entry to log data for consumption and visualization by TensorBoard
-                writer.add_scalar("loss/train", train_loss, epoch)
-                writer.add_scalar("f1/dev", dev_f1, epoch)
- 
-        dev_f1 = compute_dev(yDev, outputsVal)[1]
-        print(f"biLSTM dev slot F1: {dev_f1:.4f}"
+            # EarlyStopper minimizes, so feed it negative F1
+            #if early_stopper.early_stop(-m["span_f1"]):
+                #break
 
-        torch.save(model, checkPointDir + f'/bilstm_{trainFrac}.pth') 
+        model.load_state_dict(best_state)
+        print(f"biLSTM dev F1 (span level): {best_span:.4f}")
+        print(f"biLSTM dev F1 (token level): {best_token:.4f}")
+
+        torch.save(model.state_dict(), os.path.join(checkPointDir, f"bilstm_{trainFrac}.pt"))
         writer.close()
-        return dev_f1 
+        return best_span, best_token
+
     # ------------------------------------------------------------------ 
 
     raise NotImplementedError("train_loop() is left for you to implement.")
@@ -353,6 +395,9 @@ def main() -> None:
 
     xTrain = [ex.tokens for ex in train_data]
     yTrain = [ex.slots for ex in train_data]
+    
+    xDev = [ex.tokens for ex in dev_data]
+    yDev = [ex.slots for ex in dev_data]
 
     # i think you'd need to split the training data such that the first list of list of dicts are for the tokens
     # and the second is for the labels (slots).
@@ -367,7 +412,7 @@ def main() -> None:
     else:
         model = build_model(args.model)
 
-    dev_score = train_loop(model, xTrain, yTrain, dev_data, args)
+    dev_score_span, dev_score_token = train_loop(model, xTrain, yTrain, xDev, yDev, vocab, args)
 
     import os
 
@@ -382,8 +427,8 @@ def main() -> None:
     print(f"  Train fraction: {args.train_fraction}")
     print(f"  Checkpoint dir: {args.checkpoint_dir}")
 
-    if dev_score is not None:
-        print(f"  Final dev F1:   {dev_score:.4f}")
+    if dev_score_span is not None:
+        print(f"  Final dev F1:   {dev_score_span:.4f}")
 
 
 if __name__ == "__main__":
