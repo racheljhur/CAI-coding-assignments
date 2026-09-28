@@ -20,7 +20,9 @@ import data_loader
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import copy
+import json
 import numpy as np
+import joblib
 import os
 
 def parse_args() -> argparse.Namespace:
@@ -194,6 +196,8 @@ def build_model(
     model_type: str,
     vocab_size: int | None = None,
     tagset_size: int | None = None,
+    embedding_dim: int | None = None,
+    vocab: dict | None = None
 ) -> Any:
     """Construct an untrained model instance for the given model type.
 
@@ -220,7 +224,7 @@ def build_model(
                 "vocab_size and tagset_size are required for model_type='bilstm'"
             )
 
-        return BiLSTMModel(vocab_size=vocab_size, tagset_size=tagset_size)
+        return BiLSTMModel(vocab_size=vocab_size, tagset_size=tagset_size, embedding_dim = 300, word2idx = vocab)
 
     # ignoreMe: note that this is a sequence of early exits, since
     # the return line is nested in each condition.
@@ -262,8 +266,8 @@ def train_loop(
     xTrain: Any,
     yTrain: Any,
     xDev: Any,
-    yDev:Any,
-    vocab:Any,
+    yDev: Any,
+    vocab: Any,
     args: argparse.Namespace,
     ) -> float:
     """Train `model` on `train_data`, validating against `dev_data`.
@@ -294,10 +298,25 @@ def train_loop(
     num_epochs = args.epochs
     
     os.makedirs(checkPointDir, exist_ok = True)
+    
+    cwd = os.getcwd()
+    metaDataPath = os.path.join(cwd, 'metaData')
+    os.makedirs(metaDataPath, exist_ok = True)
 
     if model.model_type == 'crf': 
+        # add meta-data to recall model training details.
+        config = {
+                'model': 'crf',
+                'optim': 'lbfgs',
+                'numIter': 100,
+                'tokenization': 'manual parse',
+                'notes': 'the tokenToVec was done manually. context windows were built with a max perception of one word (i.e, t-1, t+1). all that was added about its neighborhood was about the grammar of the word (e.g., word.isupper).',
+                }
+        with open(metaDataPath + "/crf_config.json", "w") as f:
+            json.dump(config, f, indent=2) 
+
         # model instance is passed in as an argument. override the default filename.
-        model.model.model_filename = os.path.join(f'{checkPointDir}', f'crf_{trainFrac}.pkl')        
+        #model.model.model_filename = os.path.join(f'{checkPointDir}', f'crf_model_{args.train_fraction}.pkl')        
         model.fit(xTrain, yTrain)
 
         yPred = model.predict(xDev)
@@ -312,6 +331,8 @@ def train_loop(
         print(f"CRF dev F1 (span level): {dev_f1_span:.4f}")
         print(f"CRF dev F1 (token level): {dev_f1_token:.4f}")
         
+        joblib.dump(model.model, os.path.join(checkPointDir, f'crf_model_{args.train_fraction}.pkl'))
+
         return dev_f1_span, dev_f1_token 
 
     else:
@@ -322,6 +343,20 @@ def train_loop(
         criterion = torch.nn.CrossEntropyLoss(ignore_index=-100)
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         early_stopper = EarlyStopper(patience=10, min_delta=0.0)
+
+        # add meta-data to recall model training details.
+        config = {
+                'model': 'bilstm',
+                'numHidden': 1,
+                'optim': 'Adam',
+                'numIter': num_epochs,
+                'tokenization': 'word-level manual parse',
+                'token_to_id': 'ordered by frequency, such that increasing integers corresponded to lower frequency',
+                'notes on featurization': 'used static word embedding GloVe',
+                'notes on tags': 'because nn.functional.cross_entropy() needs logit to logit computations, the tags themselves must also get numerical embeddings. for these, we just assigned each tag an integer. the final layer of the bilstm model maps from h > tag, but this tag might be continuous - there is nothing enfocring that these tags are in any way similar to the tags that we embedded for the ground truth.',
+                }
+        with open(metaDataPath + "/bilstm_config.json", "w") as f:
+            json.dump(config, f, indent=2) 
 
         best_span, best_token, best_state = -1.0, None, None
 
@@ -343,8 +378,12 @@ def train_loop(
         for i, slots in enumerate(yTrain):
             yTrain_ids[i, :len(slots)] = torch.tensor([vocab['tag_to_id'][slot] for slot in slots])
 
-        print(xTrain_ids.size()), print(yTrain_ids.size())
-
+        #print(xTrain_ids.size()), print(yTrain_ids.size())
+        
+        #model.to(device)
+        #xTrain_ids = xTrain_ids.to(device)
+        #yTrain_ids = yTrain_ids.to(device)
+        print(f'Training...')
         for epoch in range(num_epochs): 
             model.train()
             optimizer.zero_grad() 
@@ -377,7 +416,16 @@ def train_loop(
         print(f"biLSTM dev F1 (span level): {best_span:.4f}")
         print(f"biLSTM dev F1 (token level): {best_token:.4f}")
 
-        torch.save(model.state_dict(), os.path.join(checkPointDir, f"bilstm_{trainFrac}.pt"))
+        torch.save(
+            {
+                "state_dict": model.state_dict(),
+                "vocab_size": vocab["vocab_size"],
+                "tagset_size": vocab["tagset_size"],
+                "vocab": vocab,
+            },
+            os.path.join(checkPointDir, f"bilstm_model_{trainFrac}.pt"),
+        )
+        
         writer.close()
         return best_span, best_token
 
@@ -390,9 +438,11 @@ def main() -> None:
     args = parse_args()
     set_seed(args.seed)
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
+
     train_data, dev_data, test_data, vocab = load_data(args.train_fraction, args.seed)
     # Example(tokens: list[str], slots: list[str], intent: str)
-
+ 
     xTrain = [ex.tokens for ex in train_data]
     yTrain = [ex.slots for ex in train_data]
     
@@ -406,7 +456,7 @@ def main() -> None:
 
     if args.model == "bilstm":
         model = build_model(
-            args.model, vocab_size=vocab["vocab_size"], tagset_size=vocab["tagset_size"]
+            args.model, vocab_size=vocab["vocab_size"], tagset_size=vocab["tagset_size"], embedding_dim = 300, vocab = vocab
         )
 
     else:

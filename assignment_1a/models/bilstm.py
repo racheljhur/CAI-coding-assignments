@@ -10,6 +10,7 @@ actual embedding → BiLSTM → tag-space projection pass. Look for the
 
 from __future__ import annotations
 from typing import Any
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,6 +22,7 @@ class BiLSTMModel(nn.Module):
         tagset_size: int,
         embedding_dim: int = 100,
         hidden_dim: int = 128,
+        word2idx: dict | None = None,
     ) -> None:
         """Define the model's layers per the README's architecture:
         embeddings -> BiLSTM -> per-token softmax.
@@ -42,6 +44,35 @@ class BiLSTMModel(nn.Module):
         #       num_embeddings
         #       embedding_dim
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
+
+        # (v2) using GloVe static word embeddings
+        if True:
+            glove_path = Path(__file__).resolve().parent / "dolma_300_2024_1.2M.100_combined.txt"
+            cache_path = Path(__file__).resolve().parent / f"glove_cache_{vocab_size}x{embedding_dim}.pt"
+
+        if word2idx is not None and (cache_path.exists() or glove_path.exists()):
+            tok2id = word2idx["token_to_id"]
+
+            if cache_path.exists():
+                weights = torch.load(cache_path)
+                print(f"Loaded cached GloVe weights from {cache_path.name}")
+            else:
+                weights = torch.randn(vocab_size, embedding_dim) * 0.6
+                found = 0
+                with open(glove_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        word, rest = line.split(" ", 1)  # only split off the word
+                        ids = [tok2id[t] for t in (word, word.capitalize(), word.upper()) if t in tok2id]
+                        if not ids:
+                            continue  # most lines end here, never parsing the floats
+                        vec = torch.tensor([float(x) for x in rest.split()])
+                        if vec.numel() != embedding_dim:
+                            continue
+                        for idx in ids:
+                            weights[idx] = vec
+                            found += 1
+                print(f"GloVe coverage: {found}/{vocab_size} tokens")
+                torch.save(weights, cache_path)
 
         # an lstm will 1) use the same weights to scale the preceding node (t-1), and compute forget, input, and output values
         # to be used to update a cell state. a bilstm is a bit more involved but it does this using (t-1) and (t+1) so it stores
@@ -107,28 +138,42 @@ class BiLSTMModel(nn.Module):
         # note that sentences_batch is already padded for you.       
         
         # NOTE - embedding takes in something that is already numerically encoded. i've used the vocab['token_to_id'] to do this.
-        embeds = self.embedding(sentences_batch) 
-        
-        # pack_padded_sequence returns a packed sequence, which
-        # holds the data and list of batch_sizes of a packed sequence.
-        # if you had tensor([1, 0, 0], [1, 2, 0], [1, 2, 3])
-        # the packed version would be [1 1 2 2 2 3] - it will pack in order of sequence length, per entry.
-        packed = nn.utils.rnn.pack_padded_sequence(embeds, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        if False:
+            embeds = self.embedding(sentences_batch) 
+            
+            # pack_padded_sequence returns a packed sequence, which
+            # holds the data and list of batch_sizes of a packed sequence.
+            # if you had tensor([1, 0, 0], [1, 2, 0], [1, 2, 3])
+            # the packed version would be [1 1 2 2 2 3] - it will pack in order of sequence length, per entry.
+            packed = nn.utils.rnn.pack_padded_sequence(embeds, lengths.cpu(), batch_first=True, enforce_sorted=False)
 
-        packed_out, _ = self.lstm(packed)
+            packed_out, _ = self.lstm(packed)
 
-        h, _ = nn.utils.rnn.pad_packed_sequence(
-                packed_out, batch_first=True,
-                total_length=sentences_batch.size(1),          
-                )                                               # (batch_size, L, 2h)
+            h, _ = nn.utils.rnn.pad_packed_sequence(
+                    packed_out, batch_first=True,
+                    total_length=sentences_batch.size(1),          
+                    )                                               # (batch_size, L, 2h)
 
-        # i think you need to squeeze this to be (batch_size, 256)
+            # i think you need to squeeze this to be (batch_size, 256)
 
-        #print(f'hidden layer shape (pre-hidden2tag pass) {h.size()}') # (batch_size, 42, 256)
-        h2tag = self.hidden2tag(h) # no layer normalization is needed.
+            #print(f'hidden layer shape (pre-hidden2tag pass) {h.size()}') # (batch_size, 42, 256)
+            h2tag = self.hidden2tag(h) # no layer normalization is needed.
 
-        return h2tag
-        
+            return h2tag
+
+        # (v2) using GloVe
+        if True:
+            embeds = self.embedding(sentences_batch)
+            packed = nn.utils.rnn.pack_padded_sequence(
+                embeds, lengths.cpu(), batch_first=True, enforce_sorted=False
+            )
+            packed_out, _ = self.lstm(packed)
+            h, _ = nn.utils.rnn.pad_packed_sequence(
+                packed_out, batch_first=True, total_length=sentences_batch.size(1)
+            )
+            return self.hidden2tag(h)
+
+
         # ------------------------------------------------------------------
         raise NotImplementedError("forward() is left for you to implement.")
 

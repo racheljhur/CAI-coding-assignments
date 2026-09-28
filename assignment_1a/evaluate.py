@@ -18,9 +18,12 @@ Usage:
 from __future__ import annotations
 import argparse
 import os
+import numpy as np
 from types import SimpleNamespace
 from typing import Any, Literal
 from scorer import *
+from train import *
+
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for an evaluation run."""
@@ -58,10 +61,18 @@ def parse_args() -> argparse.Namespace:
         help="Which split to evaluate on (default: dev).",
     )
 
+    parser.add_argument(
+        "--saveDir",
+        type=str,
+        required=True,
+        help="directory to write test f1 scores to.",
+    )
+
+
     return parser.parse_args()
 
 
-def load_model(model_type: str, checkpoint_dir: str) -> Any:
+def load_model(model_type: str, checkpoint_dir: str, trainFrac: float, ) -> Any:
     """Construct a model and load its trained weights/state from `checkpoint_dir`.
 
     Checkpoint format contract (what `train_loop()` in `train.py` must produce):
@@ -75,7 +86,6 @@ def load_model(model_type: str, checkpoint_dir: str) -> Any:
     """
     model: Any
     
-    trainFrac = args.train_fraction
     if model_type == "crf":
         # --- Integration point: `models/crf.py` ------------------------------
         # Same dispatch pattern as `train.py`'s `build_model()`.
@@ -85,7 +95,7 @@ def load_model(model_type: str, checkpoint_dir: str) -> Any:
         # note that joblib speeds up disk-based caching
         
         model = CRFModel()
-        model.model = joblib.load(os.path.join(checkpoint_dir, f"crf_{trainFrac}.pkl"))
+        model.model = joblib.load(os.path.join(checkpoint_dir, f"crf_model_{trainFrac}.pkl"))
         return model
         # ---------------------------------------------------------------------
 
@@ -93,20 +103,21 @@ def load_model(model_type: str, checkpoint_dir: str) -> Any:
         # --- Integration point: `models/bilstm.py` ----------------------------
         # Same dispatch pattern as `train.py`'s `build_model()`.
         from models.bilstm import BiLSTMModel
-
         import torch
 
         checkpoint = torch.load(
-            os.path.join(checkpoint_dir, "bilstm_{trainFrac}.pt"), map_location="cpu"
+            os.path.join(checkpoint_dir, f"bilstm_model_{trainFrac}.pt"), map_location="cpu"
         )
-
+        
         model = BiLSTMModel(
-            vocab_size=checkpoint["vocab_size"],
-            tagset_size=checkpoint["tagset_size"],
+            vocab_size = checkpoint["vocab_size"],
+            tagset_size = checkpoint["tagset_size"],
+            word2idx = checkpoint["vocab"], 
+            embedding_dim = 300
         )
 
         model.load_state_dict(checkpoint["state_dict"])
-        model.vocab = SimpleNamespace(**checkpoint["vocab"])
+        model.vocab = checkpoint["vocab"]
         return model
         # ---------------------------------------------------------------------
 
@@ -163,11 +174,58 @@ def compute_metrics(
     # ------------------------------------------------------------------
     raise NotImplementedError("compute_metrics() is left for you to implement.")
 
+def show_failures(
+    sentences: list[list[str]],
+    gold: list[list[str]],
+    predictions: list[list[str]],
+    n: int = 10,
+    seed: int = 0,
+) -> str:
+    """Print n sentences where at least one predicted tag is wrong,
+    token by token, with the wrong tags marked. Returns the text too."""
+    import random
+
+    failures = [i for i, (g, p) in enumerate(zip(gold, predictions)) if list(g) != list(p)]
+    picked = sorted(random.Random(seed).sample(failures, min(n, len(failures))))
+
+    lines = [f"{len(failures)}/{len(gold)} sentences have at least one wrong tag. "
+             f"Showing {len(picked)}:"]
+    for i in picked:
+        lines.append(f"\n--- Example {i}: {' '.join(sentences[i])}")
+        w = max(len(t) for t in sentences[i])
+        for tok, g, p in zip(sentences[i], gold[i], predictions[i]):
+            mark = "   <-- WRONG" if g != p else ""
+            lines.append(f"  {tok:<{w}}  gold={g:<30} pred={p}{mark}")
+        if len(predictions[i]) != len(gold[i]):
+            lines.append(f"  (length mismatch: gold {len(gold[i])}, pred {len(predictions[i])})")
+
+    text = "\n".join(lines)
+    print(text)
+    return text
+
+def write_predictions(
+    sentences: list[list[str]],
+    predictions: list[list[str]],
+    path: str,
+) -> None:
+    """Write one JSON object per line: {"index", "tokens", "slots"}."""
+    import json
+
+    assert len(sentences) == len(predictions), "sentence/prediction count mismatch"
+    with open(path, "w", encoding="utf-8") as f:
+        for i, (toks, preds) in enumerate(zip(sentences, predictions)):
+            preds = [str(p) for p in preds]  # guard against numpy strings
+            if len(preds) != len(toks):
+                raise ValueError(
+                    f"Sentence {i}: {len(toks)} tokens but {len(preds)} predicted slots"
+                )
+            f.write(json.dumps({"index": i, "tokens": list(toks), "slots": preds}) + "\n")
+    print(f"Wrote {len(predictions)} predictions to {path}")
 
 def main() -> None:
     args = parse_args()
 
-    model = load_model(args.model, args.checkpoint_dir)
+    model = load_model(args.model, args.checkpoint_dir, args.train_fraction)
     sentences, gold_labels = load_eval_data(args.split)
 
     # `CRFModel.predict()` ignores `vocab`; `BiLSTMModel.predict()` uses it.
@@ -176,11 +234,33 @@ def main() -> None:
     predictions = model.predict(sentences, vocab)
 
     metrics = compute_metrics(predictions, gold_labels)
+    
+    tokenF1 = metrics['token_f1']
+    spanF1 = metrics['span_f1'] 
 
     print(f"Evaluation results — model={args.model}, split={args.split}")
-    print(f"  Token-level slot F1: {metrics['token_f1']:.4f}")
-    print(f"  Span-level slot F1:  {metrics['span_f1']:.4f}")
+    print(f"  Token-level slot F1: {tokenF1:.4f}")
+    print(f"  Span-level slot F1:  {spanF1:.4f}")
 
+    os.makedirs(args.saveDir, exist_ok = True)
+
+    failure_text = show_failures(sentences, gold_labels, predictions, n=10)
+    with open(os.path.join(args.saveDir, f"failures_{args.model}_trainFrac_{args.train_fraction}.txt"), "w") as f:
+        f.write(failure_text)
+
+    f1Both = np.array((tokenF1, spanF1))
+    print(f1Both.shape)
+
+    os.makedirs(args.saveDir, exist_ok = True)
+
+    if args.split == "test":
+            write_predictions(
+                sentences, predictions,
+                os.path.join(args.saveDir, f"{args.model}_predictions.jsonl"),
+            )
+
+    # write to common npy file.
+    #np.save(os.path.join(args.saveDir, f'tokenSpanF1_trainFrac_{args.train_fraction}_bilstm.npy'), f1Both)
 
 if __name__ == "__main__":
     main()

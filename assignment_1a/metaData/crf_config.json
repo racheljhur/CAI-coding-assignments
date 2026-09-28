@@ -1,0 +1,7 @@
+{
+  "model": "crf",
+  "optim": "lbfgs",
+  "numIter": 100,
+  "tokenization": "manual parse",
+  "notes": "the tokenToVec was done manually. context windows were built with a max perception of one word (i.e, t-1, t+1). all that was added about its neighborhood was about the grammar of the word (e.g., word.isupper)."
+}

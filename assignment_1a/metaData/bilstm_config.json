@@ -1,0 +1,10 @@
+{
+  "model": "bilstm",
+  "numHidden": 1,
+  "optim": "Adam",
+  "numIter": 350,
+  "tokenization": "word-level manual parse",
+  "token_to_id": "ordered by frequency, such that increasing integers corresponded to lower frequency",
+  "notes on featurization": "used static word embedding GloVe",
+  "notes on tags": "because nn.functional.cross_entropy() needs logit to logit computations, the tags themselves must also get numerical embeddings. for these, we just assigned each tag an integer. the final layer of the bilstm model maps from h > tag, but this tag might be continuous - there is nothing enfocring that these tags are in any way similar to the tags that we embedded for the ground truth."
+}

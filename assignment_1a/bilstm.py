@@ -1,0 +1,264 @@
+"""Course-provided skeleton for Part B: BiLSTM slot filling.
+
+Same fixed-interface-with-student-fill pattern as `crf.py`: the
+constructor and `predict()` are fully implemented, wiring the model
+together per the README's specified architecture (embeddings → BiLSTM →
+per-token softmax). The one thing left to implement is `forward()` — the
+actual embedding → BiLSTM → tag-space projection pass. Look for the
+`# TODO: implement` block below.
+"""
+
+from __future__ import annotations
+from typing import Any
+from pathlib import Path
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class BiLSTMModel(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        tagset_size: int,
+        embedding_dim: int = 100,
+        hidden_dim: int = 128,
+        word2idx: dict | None = None,
+    ) -> None:
+        """Define the model's layers per the README's architecture:
+        embeddings -> BiLSTM -> per-token softmax.
+
+        Args:
+            vocab_size: Number of distinct tokens in the input vocabulary.
+            tagset_size: Number of distinct BIO tags in the output space.
+            embedding_dim: Dimensionality of token embeddings.
+            hidden_dim: Hidden size of the LSTM (per direction; BiLSTM
+                output is `2 * hidden_dim`).
+        """
+        super().__init__()
+        # torch.nn.embedding:
+        #   A simple lookup table that stores embeddings of a fixed dictionary and size.
+        #   This module is often used to store word embeddings and retrieve them using indices.
+        #   The input to the module is a list of indices, and the output is the corresponding word embeddings.
+        #   
+        #   args:
+        #       num_embeddings
+        #       embedding_dim
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+
+        # (v2) using GloVe static word embeddings
+        if True:
+            glove_path = Path(__file__).resolve().parent / "dolma_300_2024_1.2M.100_combined.txt"
+            cache_path = Path(__file__).resolve().parent / f"glove_cache_{vocab_size}x{embedding_dim}.pt"
+
+        if word2idx is not None and (cache_path.exists() or glove_path.exists()):
+            tok2id = word2idx["token_to_id"]
+
+            if cache_path.exists():
+                weights = torch.load(cache_path)
+                print(f"Loaded cached GloVe weights from {cache_path.name}")
+            else:
+                weights = torch.randn(vocab_size, embedding_dim) * 0.6
+                found = 0
+                with open(glove_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        word, rest = line.split(" ", 1)  # only split off the word
+                        ids = [tok2id[t] for t in (word, word.capitalize(), word.upper()) if t in tok2id]
+                        if not ids:
+                            continue  # most lines end here, never parsing the floats
+                        vec = torch.tensor([float(x) for x in rest.split()])
+                        if vec.numel() != embedding_dim:
+                            continue
+                        for idx in ids:
+                            weights[idx] = vec
+                            found += 1
+                print(f"GloVe coverage: {found}/{vocab_size} tokens")
+                torch.save(weights, cache_path)
+
+        # an lstm will 1) use the same weights to scale the preceding node (t-1), and compute forget, input, and output values
+        # to be used to update a cell state. a bilstm is a bit more involved but it does this using (t-1) and (t+1) so it stores
+        # a bit more computed values to update the current state.
+        # when you add more layers, you are deepening in the vertical direction: 
+        # y_t > y_(t+1)
+        # ^
+        # h_t(2) > h_(t+1)(2) 
+        # ^
+        # h_t(1) > h_(t+1)(1)
+        # ^
+        # x_t > x_(t+1)
+        self.lstm = nn.LSTM(
+            input_size=embedding_dim,
+            hidden_size=hidden_dim,
+            num_layers=1,
+            bidirectional=True,
+            batch_first=True,
+        )
+
+        # we do this to prepare the embeddings for the forward and backward passes.
+        self.hidden2tag = nn.Linear(2 * hidden_dim, tagset_size)
+
+        self.model_type = 'bilstm'
+
+        # Optional +5 bonus: a handwritten CRF decoding layer (forward/Viterbi)
+        # on top of the BiLSTM emissions could be added here, e.g. as
+        # `self.crf = CRFLayer(tagset_size)` applied to the output of
+        # `hidden2tag` in `forward()`/`predict()`. Not built here — the base
+        # BiLSTM already produces per-token softmax logits as specified.
+        
+
+    def forward(
+        self, sentences_batch: torch.Tensor, lengths: torch.Tensor
+    ) -> torch.Tensor:
+        """Run embedding -> BiLSTM -> linear projection to tag space.
+
+        This is the part you implement.
+
+        Args:
+            sentences_batch: `(batch_size, max_seq_len)` tensor of token ids,
+                padded to the longest sequence in the batch.
+            lengths: `(batch_size,)` tensor of each sequence's true (unpadded)
+                length. Typically used with `nn.utils.rnn.pack_padded_sequence`
+                / `pad_packed_sequence` so the LSTM ignores padding.
+
+        Returns:
+            `(batch_size, max_seq_len, tagset_size)` tensor of per-token,
+            per-tag logits (unnormalized — softmax/cross-entropy is applied outside this method).
+        """
+       
+        # ------------------------------------------------------------------
+        # forward lstm pass 
+        # you are essentially learning the encoder here - takes an embedding,
+        # transforms it into a continuous space representation,
+        # and learns any dependency structures.
+        # 
+        # based on mesnil et al, 2013 (rnns for slot filling), you could either
+        # a) compute a one-hot encoding of every token in the vocabulary
+        # b) just randomly initialize some value for each entry of the d-dim embedding - THIS IS WHAT WE DO HERE.
+        # 
+        # then pass it through the biLSTM.
+        # note that sentences_batch is already padded for you.       
+        
+        # NOTE - embedding takes in something that is already numerically encoded. i've used the vocab['token_to_id'] to do this.
+        if False:
+            embeds = self.embedding(sentences_batch) 
+            
+            # pack_padded_sequence returns a packed sequence, which
+            # holds the data and list of batch_sizes of a packed sequence.
+            # if you had tensor([1, 0, 0], [1, 2, 0], [1, 2, 3])
+            # the packed version would be [1 1 2 2 2 3] - it will pack in order of sequence length, per entry.
+            packed = nn.utils.rnn.pack_padded_sequence(embeds, lengths.cpu(), batch_first=True, enforce_sorted=False)
+
+            packed_out, _ = self.lstm(packed)
+
+            h, _ = nn.utils.rnn.pad_packed_sequence(
+                    packed_out, batch_first=True,
+                    total_length=sentences_batch.size(1),          
+                    )                                               # (batch_size, L, 2h)
+
+            # i think you need to squeeze this to be (batch_size, 256)
+
+            #print(f'hidden layer shape (pre-hidden2tag pass) {h.size()}') # (batch_size, 42, 256)
+            h2tag = self.hidden2tag(h) # no layer normalization is needed.
+
+            return h2tag
+
+        # (v2) using GloVe
+        if True:
+            embeds = self.embedding(sentences_batch)
+            packed = nn.utils.rnn.pack_padded_sequence(
+                embeds, lengths.cpu(), batch_first=True, enforce_sorted=False
+            )
+            packed_out, _ = self.lstm(packed)
+            h, _ = nn.utils.rnn.pad_packed_sequence(
+                packed_out, batch_first=True, total_length=sentences_batch.size(1)
+            )
+            return self.hidden2tag(h)
+
+
+        # ------------------------------------------------------------------
+        raise NotImplementedError("forward() is left for you to implement.")
+
+    def viterbi_decode(
+        self, emissions: torch.Tensor, lengths: torch.Tensor
+    ) -> list[list[str]]:
+        """Hand-written Viterbi decode over BiLSTM emissions.
+
+        STUDENT-IMPLEMENTED, OPTIONAL — backs the README's "+5 bonus: add a
+        CRF decoding layer on top of BiLSTM (handwritten forward/Viterbi)."
+        Not implemented by default. If you implement this, `predict()`
+        picks it up automatically (it calls this first and only falls back
+        to plain argmax decoding if this raises `NotImplementedError`) —
+        no flag or declaration needed anywhere else. Must be a genuinely
+        hand-written forward/Viterbi pass over learned tag-transition
+        scores; don't call out to an external CRF library here (e.g.
+        `sklearn-crfsuite`) — that's Part A's job.
+
+        Args:
+            emissions: `(batch_size, max_seq_len, tagset_size)` tensor of
+                per-token, per-tag logits — the same tensor `forward()`
+                returns.
+            lengths: `(batch_size,)` tensor of each sequence's true
+                (unpadded) length.
+
+        Returns:
+            A list of predicted BIO label sequences (as tag strings), one
+            per input sequence, aligned token-for-token and truncated to
+            each sequence's true length.
+        """
+        # ------------------------------------------------------------------
+        # TODO: implement (optional bonus)
+        # ------------------------------------------------------------------
+        raise NotImplementedError(
+            "viterbi_decode() is an optional +5 bonus, not implemented by default."
+        )
+
+    def predict(self, sentences: list[list[str]], vocab: Any) -> list[list[str]]:
+        """Predict BIO label sequences for tokenized sentences.
+
+        Gives `BiLSTMModel` the same `.predict()` signature as `CRFModel`,
+        so `autograder_interface.py` can call either model uniformly.
+
+        Args:
+            sentences: A list of tokenized sentences (raw token strings).
+            vocab: Vocabulary/label object exposing the token<->id and
+                tag<->id mappings built by `data_loader.py` (e.g.
+                `vocab.token_to_id`, `vocab.id_to_tag`). Adjust the exact
+                attribute names below to match `data_loader.py`'s actual
+                interface once it exists.
+
+        Returns:
+            A list of predicted BIO label sequences, one per sentence,
+            aligned token-for-token with `sentences`.
+        """
+        # --- Integration point: `data_loader.py`'s vocab interface. ---------
+        unk_id = vocab['token_to_id'].get("<UNK>", 0)
+        id_sequences = [
+            [vocab['token_to_id'].get(token, unk_id) for token in sentence]
+            for sentence in sentences
+        ]
+        # ---------------------------------------------------------------------
+
+        lengths = torch.tensor([len(seq) for seq in id_sequences], dtype=torch.long)
+        max_len = int(lengths.max().item())
+
+        padded = torch.zeros((len(id_sequences), max_len), dtype=torch.long)
+        for idx, seq in enumerate(id_sequences):
+            padded[idx, : len(seq)] = torch.tensor(seq, dtype=torch.long)
+
+        self.eval()
+        with torch.no_grad():
+            logits = self.forward(padded, lengths)
+
+            try:
+                return self.viterbi_decode(logits, lengths)
+            except NotImplementedError:
+                pass
+
+            predicted_ids = logits.argmax(dim=-1)
+
+        predictions: list[list[str]] = []
+
+        for idx, length in enumerate(lengths.tolist()):
+            tag_ids = predicted_ids[idx, :length].tolist()
+            predictions.append([vocab['id_to_tag'][tag_id] for tag_id in tag_ids])
+
+        return predictions
