@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any, cast
 import sklearn_crfsuite
 
-
 class CRFModel:
     def __init__(self) -> None:
         """Initialize underlying `sklearn-crfsuite` CRF estimator.
