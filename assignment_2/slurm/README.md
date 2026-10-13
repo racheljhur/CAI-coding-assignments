@@ -3,7 +3,7 @@
 ## Storage: keep environments and caches on scratch (read first)
 
 Your PACE-ICE **home directory is small** (~15–30 GB). The `CAI_A2` conda environment
-(PyTorch etc.) plus the model downloads (your 1–1.5B base, the 7B judge) will overflow it
+(PyTorch etc.) plus the model downloads (your 1–3B base, the 8B judge) will overflow it
 and you'll hit `OSError: Disk quota exceeded`. Put everything heavy on your much larger
 `~/scratch` instead. Add these to your `~/.bashrc` once:
 
@@ -45,7 +45,7 @@ sbatch slurm/train_dpo.sbatch
 sbatch slurm/evaluate.sbatch
 ```
 
-All templates request a single H100 — ample for a 1–1.5B model with LoRA. Adjust
+All templates request a single H100 — ample for a 1–3B model with LoRA. Adjust
 `--time`/`--mem` if your hyperparameters (batch size, sequence length, number of pairs)
 push past these defaults.
 
@@ -55,7 +55,12 @@ three betas train in parallel as separate array tasks, each into its own
 `checkpoints/dpo/beta_<value>/`.
 
 **The ask/answer judge needs no endpoint.** `evaluate.py` loads the course judge model
-(`Qwen2.5-7B-Instruct`, set in `configs/evaluation_config.py`) in-process on the eval
+(`Llama-3.1-8B-Instruct`, set in `configs/evaluation_config.py`) in-process on the eval
 job's own GPU — it co-resides with your policy, costs nothing, and its judgments are
 cached to `output/judge_cache.json` so re-runs reproduce. The first eval run downloads
 the judge model to your Hugging Face cache.
+
+**Gated models — authenticate once.** The Llama base and judge checkpoints are gated on
+Hugging Face. Accept each model's license on its HF page, then run `huggingface-cli login`
+(or set `HF_TOKEN` in `~/.bashrc`) before your first training/eval job, or the download 401s
+on the compute node.

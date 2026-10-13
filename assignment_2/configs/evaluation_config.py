@@ -22,9 +22,9 @@ MMLU_MAX_NEW_TOKENS = 8
 
 # --- Judge: ask / answer / other classification (eval/judge.py) ---
 
-# The course judge runs IN-PROCESS on PACE-ICE: a Qwen2.5-7B-Instruct model loaded on the
+# The course judge runs IN-PROCESS on PACE-ICE: a Llama-3.1-8B-Instruct model loaded on the
 # same GPU the eval job already has -- no external endpoint, no cost, no server to keep up.
-# It co-resides comfortably with a 1-1.5B student policy. Judgments are decoded greedily
+# It co-resides comfortably with a 1-3B student policy. Judgments are decoded greedily
 # (temperature 0) and cached to JUDGE_CACHE_PATH, so re-runs and regrades reproduce exactly.
 
 # Alternatives (if the course later stands up a vLLM server on PACE-ICE): set
@@ -32,7 +32,7 @@ MMLU_MAX_NEW_TOKENS = 8
 # offline heuristic for model-free pipeline testing only -- never for grading.
 
 JUDGE_BACKEND = "local_hf"  # "local_hf" | "openai_compatible" | "mock".
-JUDGE_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+JUDGE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 
 JUDGE_BASE_URL = ""  # Only for "openai_compatible" (e.g. a vLLM server URL).
 JUDGE_CACHE_PATH = os.path.join(OUTPUT_FOLDER, "judge_cache.json")

@@ -11,7 +11,7 @@ classes:
   - clear: a fully-specified request. The PREFERRED (chosen) response answers directly;
     the DISPREFERRED (rejected) response is a needless clarifying question.
 
-You MAY synthesize these with an LLM. The course model (Qwen2.5-7B-Instruct) runs on
+You MAY synthesize these with an LLM. The course model (Llama-3.1-8B-Instruct) runs on
 PACE-ICE at no cost -- load it locally the same way eval/judge.py's LocalHFJudge does.
 You MUST hand-verify a sample of HAND_VERIFY_SAMPLE (100) pairs and report the
 rejection rate of your own synthetic data (spec, Part 1 + the "preference data quality" rubric line).

@@ -35,11 +35,16 @@ the eval judge). See `env.yml` for the full pinned list.
 
 **Base model — your choice of one small instruct checkpoint:**
 
-- [`Qwen/Qwen2.5-1.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) (default in `configs/train_config.py`), or
-- [`meta-llama/Llama-3.2-1B-Instruct`](https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct).
+- [`meta-llama/Llama-3.2-1B-Instruct`](https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct) (default in `configs/train_config.py`), or
+- [`meta-llama/Llama-3.2-3B-Instruct`](https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct).
 
 Both run LoRA on a single PACE-ICE GPU in minutes per epoch. Set `MODEL_ID` to whichever you
 use; it's recorded in `results.json`.
+
+> **Access note — these are gated models.** The Llama checkpoints require a one-time license
+> acceptance on Hugging Face: open the model page, click to accept Meta's license (approval is
+> instant), then authenticate once with `huggingface-cli login` (or export `HF_TOKEN`) before
+> you train or evaluate. Without it the download fails with a 401/403.
 
 ---
 
@@ -161,7 +166,7 @@ it) — for base / SFT / each β:
 - **MMLU-slice accuracy** on a fixed 200-question slice — capability retention, before vs. after.
 
 Ask/answer are decided by an LLM **judge** (`eval/judge.py`): the course judge runs **in-process
-on PACE-ICE** — `Qwen2.5-7B-Instruct` on the eval job's own GPU, no endpoint, no cost — and caches
+on PACE-ICE** — `Llama-3.1-8B-Instruct` on the eval job's own GPU, no endpoint, no cost — and caches
 judgments so runs reproduce.
 
 **Held-out sets and the MMLU slice are the hidden test set — they are not in the starter kit.**

@@ -3,13 +3,13 @@
 
 The metric behind ask-rate and answer-rate is: for each (prompt, response), does the
 response *ask a clarifying question* or *attempt a direct answer*? We decide this with an
-LLM judge rather than a brittle "contains a '?'" heuristic, because a 1-1.5B model's
+LLM judge rather than a brittle "contains a '?'" heuristic, because a 1-3B model's
 outputs are messy -- it can answer with a rhetorical question, or ask while also guessing.
 
 Backends (pick via configs/evaluation_config.py JUDGE_BACKEND):
 
   - LocalHFJudge ("local_hf", the course default): loads the course judge model
-    (Qwen2.5-7B-Instruct) in-process via transformers and classifies on the same GPU the
+    (Llama-3.1-8B-Instruct) in-process via transformers and classifies on the same GPU the
     eval job already has. No server, no port, no cost -- it runs entirely inside the
     student's PACE-ICE job. This is deliberate: a shared always-on endpoint is fragile on
     a SLURM cluster (walltime caps, changing hostnames, concurrency), whereas an in-process
@@ -135,11 +135,11 @@ class LocalHFJudge:
     """Course default: the judge model loaded in-process via transformers.
 
     Runs on the same GPU the eval job already has -- no server, no endpoint, no cost. The
-    model (Qwen2.5-7B-Instruct by default) co-resides comfortably with a 1-1.5B student
+    model (Llama-3.1-8B-Instruct by default) co-resides comfortably with a 1-3B student
     policy. Lazy-loads on first use so importing this module never touches the GPU.
     """
 
-    def __init__(self, model_name: str = "Qwen/Qwen2.5-7B-Instruct"):
+    def __init__(self, model_name: str = "meta-llama/Llama-3.1-8B-Instruct"):
         self.model_name = model_name
         self._model = None
         self._tokenizer = None

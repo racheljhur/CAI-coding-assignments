@@ -19,7 +19,7 @@ eval/held_out_ambiguous.jsonl / eval/held_out_clear.jsonl (and optionally your o
 eval/mmlu_slice.jsonl) in the documented format, then run this -- see eval/README.md. Any
 set whose file is absent is simply skipped, so you can self-check behavior without MMLU.
 
-The ask/answer judge (eval/judge.py) runs in-process on PACE-ICE (Qwen2.5-7B-Instruct) --
+The ask/answer judge (eval/judge.py) runs in-process on PACE-ICE (Llama-3.1-8B-Instruct) --
 no endpoint, no cost -- and caches judgments so runs reproduce.
 
 Usage:

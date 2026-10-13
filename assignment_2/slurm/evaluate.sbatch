@@ -2,7 +2,7 @@
 #
 # Ready to run.
 # Evaluates base / SFT / every DPO-beta on PACE-ICE and writes output/results.json.
-# The ask/answer judge (Qwen2.5-7B-Instruct) is loaded in-process on this same GPU --
+# The ask/answer judge (Llama-3.1-8B-Instruct) is loaded in-process on this same GPU --
 # no server to stand up -- so it co-resides with the student policy. First run downloads
 # the judge model to your HF cache.
 #

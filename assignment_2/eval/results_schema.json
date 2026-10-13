@@ -16,7 +16,7 @@
       "properties": {
         "base_model": {
           "type": "string",
-          "description": "e.g. 'Qwen2.5-1.5B-Instruct' or 'Llama-3.2-1B-Instruct'."
+          "description": "e.g. 'meta-llama/Llama-3.2-1B-Instruct' or 'meta-llama/Llama-3.2-3B-Instruct'."
         },
         "seeds": {
           "type": "object",

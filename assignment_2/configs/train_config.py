@@ -8,10 +8,10 @@
 # forgetting everything else. See README.md.
 
 ALLOWED_MODELS = [
-    "Qwen/Qwen2.5-1.5B-Instruct",
     "meta-llama/Llama-3.2-1B-Instruct",
+    "meta-llama/Llama-3.2-3B-Instruct",
 ]
-MODEL_ID = "Qwen/Qwen2.5-1.5B-Instruct"
+MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"
 
 
 # LoRA config -- shared by Part A (SFT) and Part B (DPO).

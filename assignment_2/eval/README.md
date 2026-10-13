@@ -9,7 +9,7 @@ on.
 ## What ships with the starter kit
 
 - `judge.py` — the ask/answer/other classifier. Runs in-process on PACE-ICE
-  (`Qwen2.5-7B-Instruct`), caches judgments so runs reproduce. This is exactly the judge
+  (`Llama-3.1-8B-Instruct`), caches judgments so runs reproduce. This is exactly the judge
   the graders use.
 - `results_schema.json` — the JSON Schema your `results.json` must satisfy.
 - `results_template.json` — a filled example showing the expected shape.
